@@ -20,7 +20,7 @@ type PendingPush struct {
 // State holds operational data persisted between ghost-sync runs.
 type State struct {
 	PendingPushes   []PendingPush `json:"pending_pushes,omitempty"`
-	LastBackupPrune time.Time     `json:"last_backup_prune,omitempty"`
+	LastBackupPrune time.Time     `json:"last_backup_prune,omitzero"`
 }
 
 // LoadState reads State from the given JSON file path.
