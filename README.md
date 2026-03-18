@@ -29,11 +29,28 @@ A dedicated private git repository stores canonical copies of all AI files. ghos
 
 ## Installation
 
-```bash
-# From source
-go install github.com/sokolovsky/ghost-sync/cmd/ghost-sync@latest
+**One-liner** (Linux / macOS / Git Bash on Windows):
 
-# Or download a pre-built binary from GitHub Releases
+```bash
+curl -fsSL https://raw.githubusercontent.com/Fokir/ghost-sync/master/scripts/install.sh | bash
+```
+
+**Specific version:**
+
+```bash
+GHOST_SYNC_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/Fokir/ghost-sync/master/scripts/install.sh | bash
+```
+
+**Custom install directory:**
+
+```bash
+INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/Fokir/ghost-sync/master/scripts/install.sh | bash
+```
+
+**From source:**
+
+```bash
+go install github.com/sokolovsky/ghost-sync/cmd/ghost-sync@latest
 ```
 
 ## Quick Start
@@ -215,7 +232,22 @@ make test         # Run tests
 go test ./... -v  # Run all tests with verbose output
 ```
 
-Cross-platform releases (Windows/amd64, macOS/amd64, macOS/arm64, Linux/amd64) are built via goreleaser.
+Cross-platform releases (Windows/amd64, macOS/amd64, macOS/arm64, Linux/amd64, Linux/arm64) are built via goreleaser.
+
+## Releasing
+
+```bash
+# Auto-detect version bump from conventional commits (feat → minor, fix → patch)
+./scripts/release.sh
+
+# Force a specific bump
+./scripts/release.sh minor
+
+# Dry run — show what would happen
+DRY_RUN=1 ./scripts/release.sh
+```
+
+The script determines the next semver tag from commit history, creates an annotated git tag, and pushes it. GitHub Actions then builds and publishes binaries via goreleaser.
 
 ## License
 
