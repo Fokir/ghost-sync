@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sokolovsky/ghost-sync/internal/config"
@@ -79,21 +80,24 @@ func runPush(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("current directory is not a registered project — run `ghost-sync add` first")
 	}
 
-	return doPush(cfg, proj, pushFromHook, verbose)
+	return doPush(cfg, proj, pushFromHook, verbose, false)
 }
 
 // doPush copies files from the working project to the sync repo and commits/pushes.
-func doPush(cfg *config.Config, proj *config.ProjectEntry, fromHook bool, verbose bool) error {
+// If skipLock is true, the caller is responsible for holding the lock.
+func doPush(cfg *config.Config, proj *config.ProjectEntry, fromHook bool, verbose bool, skipLock bool) error {
 	if cfg.SyncRepoPath == "" {
 		return fmt.Errorf("sync_repo_path not configured — run `ghost-sync init` first")
 	}
 
-	// Acquire lock.
-	lock, err := gosync.AcquireLock(gosync.DefaultLockPath(), 10*time.Second)
-	if err != nil {
-		return fmt.Errorf("another ghost-sync operation in progress")
+	// Acquire lock unless caller already holds it.
+	if !skipLock {
+		lock, err := gosync.AcquireLock(gosync.DefaultLockPath(), 10*time.Second)
+		if err != nil {
+			return fmt.Errorf("another ghost-sync operation in progress")
+		}
+		defer gosync.ReleaseLock(lock)
 	}
-	defer gosync.ReleaseLock(lock)
 
 	patterns := cfg.EffectivePatterns(proj)
 	ignore := cfg.Ignore
@@ -203,7 +207,10 @@ func doPushGlobal(cfg *config.Config, fromHook bool, verbose bool) error {
 		maxFileSize, _ = config.ParseFileSize(config.DefaultMaxFileSize)
 	}
 
-	count, err := gosync.CopyByPatterns(home, globalDir, cfg.GlobalSync.Patterns, cfg.Ignore, maxFileSize)
+	// Normalize global patterns: strip ~/ prefix so they match relative paths under home.
+	globalPatterns := normalizeGlobalPatterns(cfg.GlobalSync.Patterns)
+
+	count, err := gosync.CopyByPatterns(home, globalDir, globalPatterns, cfg.Ignore, maxFileSize)
 	if err != nil {
 		return fmt.Errorf("copying global files to sync repo: %w", err)
 	}
@@ -306,11 +313,19 @@ func writeMetaAndCommit(syncRepo *repo.Repo, projDir string, proj *config.Projec
 		return "", err
 	}
 
-	// Update meta with commit SHA.
-	meta.LastSyncCommit = commitSHA
-	metaData, _ = yaml.Marshal(&meta)
-	_ = os.WriteFile(metaPath, metaData, 0o644)
-	// Amend is tricky; just leave the SHA from first commit — it's close enough.
-
 	return commitSHA, nil
+}
+
+// normalizeGlobalPatterns strips the ~/ prefix from patterns so they work as
+// relative paths when walking the home directory.
+func normalizeGlobalPatterns(patterns []string) []string {
+	result := make([]string, 0, len(patterns))
+	for _, p := range patterns {
+		p = strings.TrimPrefix(p, "~/")
+		p = strings.TrimPrefix(p, "~\\")
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
 }

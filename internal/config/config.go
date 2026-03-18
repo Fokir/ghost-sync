@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -194,9 +195,11 @@ func (c *Config) FindProject(id string) *ProjectEntry {
 }
 
 // FindProjectByPath returns the ProjectEntry with the given path, or nil if not found.
+// Paths are normalized with filepath.Clean and compared case-insensitively on Windows.
 func (c *Config) FindProjectByPath(path string) *ProjectEntry {
+	cleanPath := filepath.Clean(path)
 	for i := range c.Projects {
-		if c.Projects[i].Path == path {
+		if pathsEqual(filepath.Clean(c.Projects[i].Path), cleanPath) {
 			return &c.Projects[i]
 		}
 	}
@@ -248,4 +251,13 @@ func ParseFileSize(s string) (int64, error) {
 	}
 
 	return n * multiplier, nil
+}
+
+// pathsEqual compares two cleaned file paths. On Windows the comparison is
+// case-insensitive because the file system is case-insensitive.
+func pathsEqual(a, b string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }

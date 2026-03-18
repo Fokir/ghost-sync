@@ -3,9 +3,11 @@ package cli
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/sokolovsky/ghost-sync/internal/config"
 	"github.com/sokolovsky/ghost-sync/internal/project"
+	gosync "github.com/sokolovsky/ghost-sync/internal/sync"
 	"github.com/spf13/cobra"
 )
 
@@ -70,11 +72,18 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("current directory is not a registered project — run `ghost-sync add` first")
 	}
 
-	// Pull first, then push.
-	if err := doPull(cfg, proj, syncFromHook, verbose); err != nil {
+	// Acquire lock once for the entire sync operation.
+	lock, err := gosync.AcquireLock(gosync.DefaultLockPath(), 10*time.Second)
+	if err != nil {
+		return fmt.Errorf("another ghost-sync operation in progress")
+	}
+	defer gosync.ReleaseLock(lock)
+
+	// Pull first, then push — skip lock since we already hold it.
+	if err := doPull(cfg, proj, syncFromHook, verbose, true); err != nil {
 		return fmt.Errorf("pull: %w", err)
 	}
-	if err := doPush(cfg, proj, syncFromHook, verbose); err != nil {
+	if err := doPush(cfg, proj, syncFromHook, verbose, true); err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
 

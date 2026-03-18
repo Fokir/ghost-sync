@@ -69,21 +69,24 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("current directory is not a registered project — run `ghost-sync add` first")
 	}
 
-	return doPull(cfg, proj, pullFromHook, verbose)
+	return doPull(cfg, proj, pullFromHook, verbose, false)
 }
 
 // doPull copies files from the sync repo to the working project.
-func doPull(cfg *config.Config, proj *config.ProjectEntry, fromHook bool, verbose bool) error {
+// If skipLock is true, the caller is responsible for holding the lock.
+func doPull(cfg *config.Config, proj *config.ProjectEntry, fromHook bool, verbose bool, skipLock bool) error {
 	if cfg.SyncRepoPath == "" {
 		return fmt.Errorf("sync_repo_path not configured — run `ghost-sync init` first")
 	}
 
-	// Acquire lock.
-	lock, err := gosync.AcquireLock(gosync.DefaultLockPath(), 10*time.Second)
-	if err != nil {
-		return fmt.Errorf("another ghost-sync operation in progress")
+	// Acquire lock unless caller already holds it.
+	if !skipLock {
+		lock, err := gosync.AcquireLock(gosync.DefaultLockPath(), 10*time.Second)
+		if err != nil {
+			return fmt.Errorf("another ghost-sync operation in progress")
+		}
+		defer gosync.ReleaseLock(lock)
 	}
-	defer gosync.ReleaseLock(lock)
 
 	// Pull sync repo from remote first.
 	syncRepo := repo.New(cfg.SyncRepoPath)
@@ -134,6 +137,9 @@ func doPull(cfg *config.Config, proj *config.ProjectEntry, fromHook bool, verbos
 	if verbose && deleted > 0 {
 		fmt.Printf("Deleted %d stale local files (backed up)\n", deleted)
 	}
+
+	// Prune old backups: keep last 30 days, max 500 MB.
+	_ = backup.Prune(backup.DefaultDir(), 30*24*time.Hour, 500*1024*1024)
 
 	fmt.Printf("Pull complete for project %s\n", proj.Name)
 	return nil
@@ -218,7 +224,10 @@ func doPullGlobal(cfg *config.Config, fromHook bool, verbose bool) error {
 		maxFileSize, _ = config.ParseFileSize(config.DefaultMaxFileSize)
 	}
 
-	count, err := gosync.CopyByPatterns(globalDir, home, cfg.GlobalSync.Patterns, cfg.Ignore, maxFileSize)
+	// Normalize global patterns: strip ~/ prefix so they match relative paths under home/globalDir.
+	globalPatterns := normalizeGlobalPatterns(cfg.GlobalSync.Patterns)
+
+	count, err := gosync.CopyByPatterns(globalDir, home, globalPatterns, cfg.Ignore, maxFileSize)
 	if err != nil {
 		return fmt.Errorf("copying global files from sync repo: %w", err)
 	}
