@@ -37,7 +37,7 @@ func CopyByPatterns(srcDir, dstDir string, patterns, ignore []string, maxFileSiz
 		}
 
 		// Check if matches at least one pattern.
-		if len(patterns) > 0 && !matchesPatterns(rel, patterns) {
+		if len(patterns) > 0 && !MatchesPatterns(rel, patterns) {
 			return nil
 		}
 
@@ -66,9 +66,9 @@ func CopyByPatterns(srcDir, dstDir string, patterns, ignore []string, maxFileSiz
 	return count, nil
 }
 
-// matchesPatterns returns true if relPath matches any of the given patterns.
+// MatchesPatterns returns true if relPath matches any of the given patterns.
 // A pattern ending with "/" is a directory prefix match; otherwise it is an exact match.
-func matchesPatterns(relPath string, patterns []string) bool {
+func MatchesPatterns(relPath string, patterns []string) bool {
 	for _, p := range patterns {
 		if strings.HasSuffix(p, "/") {
 			// Directory pattern: match any file under this directory.

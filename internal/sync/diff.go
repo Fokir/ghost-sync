@@ -42,11 +42,11 @@ func FileHash(path string) (string, error) {
 
 // DiffFiles compares all files in localDir and remoteDir and categorizes them.
 func DiffFiles(localDir, remoteDir string) (*DiffResult, error) {
-	localFiles, err := collectFiles(localDir)
+	localFiles, err := CollectFiles(localDir)
 	if err != nil {
 		return nil, err
 	}
-	remoteFiles, err := collectFiles(remoteDir)
+	remoteFiles, err := CollectFiles(remoteDir)
 	if err != nil {
 		return nil, err
 	}
@@ -99,9 +99,9 @@ func DiffFiles(localDir, remoteDir string) (*DiffResult, error) {
 	return result, nil
 }
 
-// collectFiles walks dir and returns a map of slash-separated relative paths.
+// CollectFiles walks dir and returns a map of slash-separated relative paths.
 // Symlinks are skipped (not followed).
-func collectFiles(dir string) (map[string]struct{}, error) {
+func CollectFiles(dir string) (map[string]struct{}, error) {
 	files := make(map[string]struct{})
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
