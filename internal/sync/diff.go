@@ -127,12 +127,19 @@ func CollectFiles(dir string) (map[string]struct{}, error) {
 	return files, nil
 }
 
-// IsIgnored returns true if relPath starts with any of the given ignore patterns.
+// IsIgnored returns true if relPath matches any of the given ignore patterns.
+// A pattern is matched as a prefix (e.g. ".claude/cache/" ignores everything under it).
+// Additionally, ".git/" segments are always ignored at any depth to prevent syncing
+// embedded git repositories.
 func IsIgnored(relPath string, ignorePatterns []string) bool {
 	for _, pattern := range ignorePatterns {
 		if strings.HasPrefix(relPath, pattern) {
 			return true
 		}
+	}
+	// Always ignore .git directories at any nesting level.
+	if strings.HasPrefix(relPath, ".git/") || strings.Contains(relPath, "/.git/") {
+		return true
 	}
 	return false
 }

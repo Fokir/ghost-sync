@@ -26,7 +26,7 @@ type ConflictRule struct {
 // GlobalSync contains settings for syncing to all projects.
 type GlobalSync struct {
 	Enabled  bool     `yaml:"enabled"`
-	Patterns []string `yaml:"patterns,omitempty"`
+	Patterns []string `yaml:"paths,omitempty"`
 }
 
 // ProjectEntry represents a registered project in the config.

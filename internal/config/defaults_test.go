@@ -37,7 +37,21 @@ func TestDefaultIgnore(t *testing.T) {
 
 	expected := []string{
 		"node_modules/",
+		".git/",
 		".claude/cache/",
+		".claude/backups/",
+		".claude/chrome/",
+		".claude/debug/",
+		".claude/file-history/",
+		".claude/ide/",
+		".claude/paste-cache/",
+		".claude/plans/",
+		".claude/plugins/",
+		".claude/projects/",
+		".claude/sessions/",
+		".claude/shell-snapshots/",
+		".claude/statsig/",
+		".claude/todos/",
 	}
 
 	if len(ignore) != len(expected) {

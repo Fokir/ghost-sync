@@ -24,6 +24,12 @@ func CopyByPatterns(srcDir, dstDir string, patterns, ignore []string, maxFileSiz
 		if d.IsDir() {
 			return nil
 		}
+		// On Windows, reparse points (junctions, directory symlinks) may not
+		// be detected by the checks above. Skip any non-regular file to avoid
+		// "Incorrect function" errors when trying to read a directory.
+		if !d.Type().IsRegular() {
+			return nil
+		}
 
 		rel, err := filepath.Rel(srcDir, path)
 		if err != nil {
@@ -94,6 +100,10 @@ func copyFile(src, dst string) error {
 	srcInfo, err := os.Stat(src)
 	if err != nil {
 		return err
+	}
+	// Safety check: skip directories (e.g. Windows junctions resolved by os.Stat).
+	if srcInfo.IsDir() {
+		return nil
 	}
 
 	in, err := os.Open(src)
