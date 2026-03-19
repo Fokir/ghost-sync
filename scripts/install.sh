@@ -76,6 +76,52 @@ get_latest_version() {
 }
 
 # ---------------------------------------------------------------------------
+# Add directory to shell profile PATH
+# ---------------------------------------------------------------------------
+add_to_path() {
+  local dir="$1"
+  local export_line="export PATH=\"${dir}:\$PATH\""
+  local profile=""
+
+  # Detect shell profile.
+  local shell_name
+  shell_name="$(basename "${SHELL:-/bin/sh}")"
+
+  case "$shell_name" in
+    zsh)  profile="$HOME/.zshrc" ;;
+    bash)
+      if [ -f "$HOME/.bashrc" ]; then
+        profile="$HOME/.bashrc"
+      elif [ -f "$HOME/.bash_profile" ]; then
+        profile="$HOME/.bash_profile"
+      else
+        profile="$HOME/.profile"
+      fi
+      ;;
+    *)    profile="$HOME/.profile" ;;
+  esac
+
+  # On Windows (Git Bash/MSYS), prefer .bashrc.
+  if [ "$OS" = "windows" ] && [ -z "$profile" ]; then
+    profile="$HOME/.bashrc"
+  fi
+
+  # Skip if already present in the profile.
+  if [ -f "$profile" ] && grep -qF "$dir" "$profile"; then
+    return
+  fi
+
+  echo "" >> "$profile"
+  echo "# Added by ghost-sync installer" >> "$profile"
+  echo "$export_line" >> "$profile"
+
+  echo ""
+  echo "Added ${dir} to PATH in ${profile}"
+  echo "Restart your terminal or run:"
+  echo "  source ${profile}"
+}
+
+# ---------------------------------------------------------------------------
 # Download and install
 # ---------------------------------------------------------------------------
 install() {
@@ -117,13 +163,9 @@ install() {
   echo ""
   echo "Installed ${BINARY} ${VERSION} to ${INSTALL_DIR}/${BINARY}"
 
-  # Check if install dir is in PATH.
+  # Add install dir to PATH if missing.
   if ! echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
-    echo ""
-    echo "WARNING: ${INSTALL_DIR} is not in your PATH."
-    echo "Add it with:"
-    echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
-    echo ""
+    add_to_path "$INSTALL_DIR"
   fi
 
   echo "Run 'ghost-sync version' to verify."
