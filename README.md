@@ -208,10 +208,18 @@ Add `ghost-sync check` as a session start hook in your AI agent. For Claude Code
 ```json
 {
   "hooks": {
-    "SessionStart": [{
-      "command": "ghost-sync check",
-      "timeout": 5000
-    }]
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ghost-sync check",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
   }
 }
 ```
