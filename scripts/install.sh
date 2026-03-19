@@ -14,6 +14,7 @@ REPO="Fokir/ghost-sync"
 BINARY="ghost-sync"
 VERSION="${GHOST_SYNC_VERSION:-}"
 INSTALL_DIR="${INSTALL_DIR:-}"
+tmpdir=""
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -90,7 +91,6 @@ install() {
   echo "  Install  : ${INSTALL_DIR}/${BINARY}"
   echo ""
 
-  local tmpdir
   tmpdir="$(mktemp -d)"
   trap 'rm -rf "$tmpdir"' EXIT
 
