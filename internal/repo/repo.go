@@ -92,6 +92,33 @@ func (r *Repo) HasRemote() bool {
 	return false
 }
 
+// DiffDeletedFiles returns relative paths of files deleted between fromCommit and HEAD
+// within the given subdirectory prefix. If fromCommit is empty, returns nil.
+func (r *Repo) DiffDeletedFiles(fromCommit, subdir string) ([]string, error) {
+	if fromCommit == "" {
+		return nil, nil
+	}
+	// Verify fromCommit exists.
+	if _, err := r.git("cat-file", "-t", fromCommit); err != nil {
+		return nil, nil // unknown commit — skip deletions
+	}
+	out, err := r.git("diff", "--diff-filter=D", "--name-only", fromCommit+"..HEAD", "--", subdir)
+	if err != nil {
+		return nil, fmt.Errorf("git diff deleted files: %w", err)
+	}
+	if out == "" {
+		return nil, nil
+	}
+	var result []string
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			result = append(result, line)
+		}
+	}
+	return result, nil
+}
+
 // CloneSyncRepo clones the remote repository at remoteURL into localPath.
 func CloneSyncRepo(remoteURL, localPath string) (*Repo, error) {
 	cmd := exec.Command("git", "clone", remoteURL, localPath)

@@ -254,8 +254,8 @@ func deleteStaleSyncFiles(projDir, gitRoot string, patterns, ignore []string) (i
 
 	deleted := 0
 	for rel := range syncFiles {
-		// Skip meta file.
-		if rel == ".ghost-sync.meta" {
+		// Skip internal ghost-sync files.
+		if rel == ".ghost-sync.meta" || rel == ".ghost-sync.last-pull" {
 			continue
 		}
 

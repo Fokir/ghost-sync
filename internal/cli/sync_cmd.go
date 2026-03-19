@@ -13,10 +13,11 @@ import (
 
 var syncCmd = &cobra.Command{
 	Use:   "sync",
-	Short: "Pull then push — full bidirectional sync",
-	Long: `Perform a full sync: pull from the sync repo, then push local changes.
+	Short: "Push then pull — full bidirectional sync",
+	Long: `Perform a full sync: push local changes first, then pull from the sync repo.
 
-This is equivalent to running 'ghost-sync pull' followed by 'ghost-sync push'.`,
+Push runs first so that new local files reach the sync repo before pull's
+stale-file cleanup can consider them missing.`,
 	RunE: runSync,
 }
 
@@ -47,12 +48,12 @@ func runSync(cmd *cobra.Command, args []string) error {
 	}
 
 	if syncGlobal {
-		// Pull global first, then push global.
-		if err := doPullGlobal(cfg, syncFromHook, verbose); err != nil {
-			return fmt.Errorf("global pull: %w", err)
-		}
+		// Push first so new local files are in sync repo before pull.
 		if err := doPushGlobal(cfg, syncFromHook, verbose); err != nil {
 			return fmt.Errorf("global push: %w", err)
+		}
+		if err := doPullGlobal(cfg, syncFromHook, verbose); err != nil {
+			return fmt.Errorf("global pull: %w", err)
 		}
 		return nil
 	}
@@ -79,12 +80,12 @@ func runSync(cmd *cobra.Command, args []string) error {
 	}
 	defer gosync.ReleaseLock(lock)
 
-	// Pull first, then push — skip lock since we already hold it.
-	if err := doPull(cfg, proj, syncFromHook, verbose, true); err != nil {
-		return fmt.Errorf("pull: %w", err)
-	}
+	// Push first so new local files reach sync repo before pull's stale-file cleanup.
 	if err := doPush(cfg, proj, syncFromHook, verbose, true); err != nil {
 		return fmt.Errorf("push: %w", err)
+	}
+	if err := doPull(cfg, proj, syncFromHook, verbose, true); err != nil {
+		return fmt.Errorf("pull: %w", err)
 	}
 
 	return nil

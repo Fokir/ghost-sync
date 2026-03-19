@@ -83,7 +83,29 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parsing config file %q: %w", path, err)
 	}
 
+	// Merge default ignore patterns with user-configured ones.
+	cfg.Ignore = mergeUnique(DefaultIgnore(), cfg.Ignore)
+
 	return &cfg, nil
+}
+
+// mergeUnique returns a combined slice with duplicates removed, preserving order.
+func mergeUnique(base, extra []string) []string {
+	seen := make(map[string]bool, len(base))
+	result := make([]string, 0, len(base)+len(extra))
+	for _, s := range base {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	for _, s := range extra {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	return result
 }
 
 // Save writes the Config to the given YAML file path, creating directories as needed.

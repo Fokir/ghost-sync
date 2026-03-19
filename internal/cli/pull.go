@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sokolovsky/ghost-sync/internal/backup"
@@ -129,13 +130,24 @@ func doPull(cfg *config.Config, proj *config.ProjectEntry, fromHook bool, verbos
 		fmt.Printf("Copied %d files from sync repo\n", count)
 	}
 
-	// Handle deletions: find files that match patterns, exist locally but NOT in sync repo projDir.
-	deleted, err := deleteStaleLocalFiles(projDir, gitRoot, patterns, ignore)
+	// Handle deletions based on git history: only delete files that were
+	// explicitly removed in the sync repo since the last pull.
+	projRelDir := filepath.ToSlash(projDir)
+	if rel, err := filepath.Rel(cfg.SyncRepoPath, projDir); err == nil {
+		projRelDir = filepath.ToSlash(rel)
+	}
+	lastCommit := readLastPullCommit(projDir)
+	deleted, err := deleteByGitHistory(syncRepo, lastCommit, projRelDir, gitRoot, patterns, ignore)
 	if err != nil {
-		return fmt.Errorf("cleaning stale local files: %w", err)
+		return fmt.Errorf("cleaning deleted files: %w", err)
 	}
 	if verbose && deleted > 0 {
-		fmt.Printf("Deleted %d stale local files (backed up)\n", deleted)
+		fmt.Printf("Deleted %d files (backed up)\n", deleted)
+	}
+
+	// Save the current sync-repo HEAD so next pull knows the baseline.
+	if head, err := syncRepo.HEAD(); err == nil {
+		writeLastPullCommit(projDir, head)
 	}
 
 	// Prune old backups: keep last 30 days, max 500 MB.
@@ -145,10 +157,15 @@ func doPull(cfg *config.Config, proj *config.ProjectEntry, fromHook bool, verbos
 	return nil
 }
 
-// deleteStaleLocalFiles removes files from gitRoot that match patterns but no longer exist in projDir.
-// Files are backed up before deletion.
-func deleteStaleLocalFiles(projDir, gitRoot string, patterns, ignore []string) (int, error) {
-	localFiles, err := gosync.CollectFiles(gitRoot)
+// deleteByGitHistory deletes local files that were explicitly removed in the
+// sync repo (per git history) since lastCommit. Only files matching patterns
+// and not ignored are considered. Files are backed up before deletion.
+func deleteByGitHistory(syncRepo *repo.Repo, lastCommit, projRelDir, gitRoot string, patterns, ignore []string) (int, error) {
+	if lastCommit == "" {
+		return 0, nil // no baseline — first pull, nothing to delete
+	}
+
+	deletedPaths, err := syncRepo.DiffDeletedFiles(lastCommit, projRelDir)
 	if err != nil {
 		return 0, err
 	}
@@ -156,8 +173,14 @@ func deleteStaleLocalFiles(projDir, gitRoot string, patterns, ignore []string) (
 	backupDir := backup.DefaultDir()
 	deleted := 0
 
-	for rel := range localFiles {
-		// Only consider files that match our sync patterns.
+	for _, fullRel := range deletedPaths {
+		// fullRel is relative to sync-repo root, e.g. "projects/foo-abc123/.claude/CLAUDE.md"
+		// Strip the project dir prefix to get the file's relative path within the project.
+		rel := strings.TrimPrefix(fullRel, projRelDir+"/")
+		if rel == fullRel {
+			continue // not under project dir
+		}
+
 		if !gosync.MatchesPatterns(rel, patterns) {
 			continue
 		}
@@ -165,19 +188,34 @@ func deleteStaleLocalFiles(projDir, gitRoot string, patterns, ignore []string) (
 			continue
 		}
 
-		// Check if the file exists in the sync repo.
-		syncPath := filepath.Join(projDir, filepath.FromSlash(rel))
-		if _, err := os.Stat(syncPath); os.IsNotExist(err) {
-			// File was deleted from sync repo — back up and remove locally.
-			localPath := filepath.Join(gitRoot, filepath.FromSlash(rel))
-			_ = backup.Create(backupDir, localPath, rel)
-			if err := os.Remove(localPath); err != nil && !os.IsNotExist(err) {
-				return deleted, fmt.Errorf("delete %s locally: %w", rel, err)
-			}
-			deleted++
+		localPath := filepath.Join(gitRoot, filepath.FromSlash(rel))
+		if _, err := os.Stat(localPath); os.IsNotExist(err) {
+			continue // already gone locally
 		}
+
+		_ = backup.Create(backupDir, localPath, rel)
+		if err := os.Remove(localPath); err != nil && !os.IsNotExist(err) {
+			return deleted, fmt.Errorf("delete %s locally: %w", rel, err)
+		}
+		deleted++
 	}
 	return deleted, nil
+}
+
+const lastPullCommitFile = ".ghost-sync.last-pull"
+
+// readLastPullCommit reads the last-pull commit SHA from the project's sync directory.
+func readLastPullCommit(projDir string) string {
+	data, err := os.ReadFile(filepath.Join(projDir, lastPullCommitFile))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// writeLastPullCommit saves the current sync-repo HEAD so the next pull can diff against it.
+func writeLastPullCommit(projDir string, sha string) {
+	_ = os.WriteFile(filepath.Join(projDir, lastPullCommitFile), []byte(sha+"\n"), 0o644)
 }
 
 // doPullGlobal pulls global paths from <syncRepoPath>/global/<machineID>/.

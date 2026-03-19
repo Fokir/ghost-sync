@@ -15,6 +15,10 @@ func CopyByPatterns(srcDir, dstDir string, patterns, ignore []string, maxFileSiz
 	count := 0
 	err := filepath.WalkDir(srcDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
+			// Skip directories we cannot access (e.g. permission denied).
+			if d != nil && d.IsDir() {
+				return filepath.SkipDir
+			}
 			return err
 		}
 		// Skip symlinks without following them.
